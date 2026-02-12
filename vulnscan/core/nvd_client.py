@@ -53,7 +53,7 @@ class NVDClient:
         # API 스킵 경고 플래그 (스캔당 한 번만 출력)
         self._api_skip_warned = False
 
-        print(f"NVD API 초기화: {'API 키 사용' if self.api_key else 'API 키 없음'}, 동시 요청: {max_concurrent}개, Delay: {self.rate_limit_delay}초, 캐시: SQLite 영속")
+        print(f"NVD API 초기화: {'API 키 사용' if self.api_key else 'API 키 없음'}, 동시 요청: {max_concurrent}개, Delay: {self.rate_limit_delay}초, 캐시: SQLite 영속", flush=True)
 
     def _init_cache_db(self):
         """SQLite 캐시 DB 초기화 및 자동 정리"""
@@ -1073,12 +1073,16 @@ class NVDClient:
         """
         from datetime import datetime as dt
 
-        # 이미 다운로드된 년도인지 확인
-        if not force:
+        # 현재 년도는 항상 재다운로드 (계속 업데이트되므로)
+        current_year = dt.now().year
+        is_current_year = (year == current_year)
+
+        # 이미 다운로드된 년도인지 확인 (현재 년도 제외)
+        if not force and not is_current_year:
             cache_key = f"__year_{year}__"
             existing_cves = self._get_cached(cache_key)
             if existing_cves:
-                print(f"\n[NVD] {year} already downloaded ({len(existing_cves)} CVEs), skipping...")
+                print(f"\n[NVD] {year} already downloaded ({len(existing_cves)} CVEs), skipping...", flush=True)
                 return {
                     "year": year,
                     "total": len(existing_cves),
@@ -1087,7 +1091,10 @@ class NVDClient:
                     "skipped": True
                 }
 
-        print(f"\n[NVD] Downloading {year} CVE data...")
+        if is_current_year:
+            print(f"\n[NVD] Downloading {year} CVE data (current year - always update)...", flush=True)
+        else:
+            print(f"\n[NVD] Downloading {year} CVE data...", flush=True)
 
         all_cves = []
 
@@ -1099,7 +1106,7 @@ class NVDClient:
         current_start = year_start
         chunk_days = 119
 
-        print(f"  Splitting year into 120-day chunks...")
+        print(f"  Splitting year into 120-day chunks...", flush=True)
 
         while current_start <= year_end:
             current_end = min(current_start + timedelta(days=chunk_days), year_end)
@@ -1107,19 +1114,19 @@ class NVDClient:
             start_date_str = current_start.strftime("%Y-%m-%dT%H:%M:%S.000")
             end_date_str = current_end.strftime("%Y-%m-%dT%H:%M:%S.999")
 
-            print(f"  Chunk: {current_start.strftime('%Y-%m-%d')} ~ {current_end.strftime('%Y-%m-%d')}")
+            print(f"  Chunk: {current_start.strftime('%Y-%m-%d')} ~ {current_end.strftime('%Y-%m-%d')}", flush=True)
 
             chunk_cves = await self._download_date_range(start_date_str, end_date_str, progress_callback)
             all_cves.extend(chunk_cves)
 
             current_start = current_end + timedelta(seconds=1)
 
-        print(f"  Total {len(all_cves)} CVEs downloaded")
+        print(f"  Total {len(all_cves)} CVEs downloaded", flush=True)
 
-        print(f"  Caching year data... ({len(all_cves)} CVEs)")
+        print(f"  Caching year data... ({len(all_cves)} CVEs)", flush=True)
         cache_key = f"__year_{year}__"
         self._set_cached(cache_key, all_cves)
-        print(f"  Year cache completed")
+        print(f"  Year cache completed", flush=True)
 
         packages = set()
         for cve in all_cves:
@@ -1132,7 +1139,7 @@ class NVDClient:
                         packages.add(parts[4])
         
         package_count = len(packages)
-        print(f"  Unique packages: {package_count}")
+        print(f"  Unique packages: {package_count}", flush=True)
 
         self._save_download_record(year, len(all_cves), package_count)
 
@@ -1161,8 +1168,8 @@ class NVDClient:
             url = f"{self.BASE_URL}?pubStartDate={start_date}&pubEndDate={end_date}&resultsPerPage={results_per_page}&startIndex={start_index}"
 
             if start_index == 0:
-                print(f"  [DEBUG] Full URL: {url}")
-                print(f"  [DEBUG] Headers: {self.headers}")
+                print(f"  [DEBUG] Full URL: {url}", flush=True)
+                print(f"  [DEBUG] Headers: {self.headers}", flush=True)
 
             # API 호출 (rate limiting 포함 - 다운로드는 더 빠른 속도)
             async with self._semaphore:
@@ -1176,21 +1183,21 @@ class NVDClient:
                         )
 
                         if start_index == 0:
-                            print(f"  [DEBUG] Response status: {response.status_code}")
+                            print(f"  [DEBUG] Response status: {response.status_code}", flush=True)
                             if response.status_code == 404:
-                                print(f"  [DEBUG] Response body: {response.text[:500]}")
+                                print(f"  [DEBUG] Response body: {response.text[:500]}", flush=True)
                         response.raise_for_status()
                         data = response.json()
 
                         if total_results is None:
                             total_results = data.get("totalResults", 0)
-                            print(f"  Total {total_results} CVEs found")
+                            print(f"  Total {total_results} CVEs found", flush=True)
 
                         vulnerabilities = data.get("vulnerabilities", [])
                         parsed_cves = [self._parse_cve(vuln) for vuln in vulnerabilities]
                         all_cves.extend(parsed_cves)
 
-                        print(f"  Progress: {len(all_cves)}/{total_results} CVEs downloaded")
+                        print(f"  Progress: {len(all_cves)}/{total_results} CVEs downloaded", flush=True)
 
                         # 다음 페이지 확인
                         if len(all_cves) >= total_results:
@@ -1200,17 +1207,17 @@ class NVDClient:
 
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code == 429:
-                        print(f"  Rate limit reached, waiting 60 seconds...")
+                        print(f"  Rate limit reached, waiting 60 seconds...", flush=True)
                         await asyncio.sleep(60)
                         continue
                     elif e.response.status_code == 404:
-                        print(f"  No data for this date range (404) - Normal for future dates")
+                        print(f"  No data for this date range (404) - Normal for future dates", flush=True)
                         break
                     else:
-                        print(f"  HTTP error: {e}")
+                        print(f"  HTTP error: {e}", flush=True)
                         break
                 except Exception as e:
-                    print(f"  Error: {e}")
+                    print(f"  Error: {e}", flush=True)
                     break
 
         return all_cves
@@ -1235,7 +1242,7 @@ class NVDClient:
 
         for year in range(start_year, end_year + 1):
             try:
-                print(f"\n[Range Download] Processing {year}... ({year - start_year + 1}/{end_year - start_year + 1})")
+                print(f"\n[Range Download] Processing {year}... ({year - start_year + 1}/{end_year - start_year + 1})", flush=True)
 
                 result = await self.download_year_data(year, progress_callback, force=force)
 
@@ -1247,7 +1254,7 @@ class NVDClient:
                     downloaded_years.append(year)
 
             except Exception as e:
-                print(f"[Error] Failed to download {year}: {e}")
+                print(f"[Error] Failed to download {year}: {e}", flush=True)
                 continue
 
         return {

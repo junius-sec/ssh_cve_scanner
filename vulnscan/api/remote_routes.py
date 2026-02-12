@@ -1292,8 +1292,8 @@ async def get_host_sbom(
 
 class NVDDownloadRequest(BaseModel):
     """NVD 년도 범위 다운로드 요청"""
-    start_year: int = Field(..., ge=1999, le=2026, description="시작 년도 (1999-2026)")
-    end_year: int = Field(2024, ge=1999, le=2026, description="종료 년도 (기본값: 2024)")
+    start_year: int = Field(2026, ge=1999, le=2026, description="시작 년도 (기본값: 2026)")
+    end_year: int = Field(2026, ge=1999, le=2026, description="종료 년도 (기본값: 2026)")
 
 
 @router.post("/nvd/download-range")
