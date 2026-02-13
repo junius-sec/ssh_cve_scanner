@@ -21,10 +21,10 @@ vulnscan.db
 # nvd_cache.db, kev_cache.json 등은 빌드에 포함되어 이미지 크기 증가
 # 대신 초기 실행 시 즉시 사용 가능
 
-# ── 환경 변수 ──
-# .env는 .env.example에서 생성되므로 제외
-# 실제 .env 파일이 있으면 docker-compose.yml의 env_file로 주입됨
+# ── 환경 변수 (보안: API 키 포함) ──
+.env
 .env.local
+env
 
 # ── 기타 불필요 파일 ──
 .cvss_migration_done

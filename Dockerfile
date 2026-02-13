@@ -31,22 +31,30 @@ COPY main.py .
 COPY vulnscan/ ./vulnscan/
 COPY static/ ./static/
 COPY templates/ ./templates/
+COPY .env.example .
 
-# ── 5) 환경변수 파일 복사 (기본값) ──
-# .env.example을 .env로 복사 (빌드 시 실제 .env가 없어도 작동)
-COPY .env.example .env
-
-# ── 6) 데이터 디렉토리 생성 ──
+# ── 5) 데이터 디렉토리 생성 ──
 RUN mkdir -p /app/data /app/vulnscan/cache
 
-# ── 7) NVD 캐시 및 보안 데이터 복사 (필수) ──
-# 즉시 사용 가능하도록 모든 캐시 데이터를 이미지에 포함
-# Git LFS로 관리되는 대용량 파일 포함
-COPY nvd_cache.db /app/data/
-COPY kev_cache.json /app/
-COPY exploit_cache.json /app/
-COPY debian_security_cache.json /app/
-COPY ubuntu_security_cache.json /app/
+# ── 6) 캐시 데이터 복사 ──
+# nvd_cache.db (1.1GB)는 있으면 복사, 없으면 스킵
+# Git LFS 실패 시에도 빌드 가능하도록 방어
+COPY nvd_cache.db* /app/data/
+COPY kev_cache.json* /app/
+COPY exploit_cache.json* /app/
+COPY debian_security_cache.json* /app/
+COPY ubuntu_security_cache.json* /app/
+
+# ── 6-1) LFS 포인터 파일 제거 (깨진 파일 방지) ──
+# Git LFS 미설치 시 포인터 텍스트(~130B)만 받아짐 → SQLite 에러 원인
+RUN if [ -f /app/data/nvd_cache.db ] && [ $(stat -c%s /app/data/nvd_cache.db) -lt 10000 ]; then \
+    echo "[경고] nvd_cache.db가 LFS 포인터입니다. 삭제합니다. (git lfs pull 필요)"; \
+    rm -f /app/data/nvd_cache.db; \
+    fi
+
+# ── 7) entrypoint 스크립트 ──
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
 
 # ── 8) 환경변수 기본값 ──
 ENV HOST=0.0.0.0
@@ -61,9 +69,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')" || exit 1
 
 # ── 11) 서버 실행 ──
-# uvicorn으로 직접 실행 (0.0.0.0 바인딩 = 컨테이너 외부 접근 허용)
-CMD ["python", "-m", "uvicorn", "main:app", \
-    "--host", "0.0.0.0", \
-    "--port", "8000", \
-    "--log-level", "warning", \
-    "--no-access-log"]
+ENTRYPOINT ["./entrypoint.sh"]

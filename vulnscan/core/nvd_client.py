@@ -57,6 +57,16 @@ class NVDClient:
 
     def _init_cache_db(self):
         """SQLite 캐시 DB 초기화 및 자동 정리"""
+        # 손상된 DB (LFS 포인터 등) 감지 및 복구
+        if os.path.exists(self._cache_db_path):
+            try:
+                test_conn = sqlite3.connect(self._cache_db_path)
+                test_conn.execute("SELECT 1")
+                test_conn.close()
+            except Exception:
+                print(f"[경고] nvd_cache.db 손상 감지 → 삭제 후 새로 생성합니다")
+                os.remove(self._cache_db_path)
+
         conn = sqlite3.connect(self._cache_db_path)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS nvd_cache (
