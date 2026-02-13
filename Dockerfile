@@ -36,14 +36,14 @@ COPY .env.example .
 # ── 5) 데이터 디렉토리 생성 ──
 RUN mkdir -p /app/data /app/vulnscan/cache
 
-# ── 6) 캐시 데이터 복사 ──
-# Git LFS 파일이 없어도 빌드 가능하도록 조건부 복사
-# 호스트에 파일이 없으면 무시됨
-COPY --chown=root:root nvd_cache.db* /app/data/ 2>/dev/null || true
-COPY --chown=root:root kev_cache.json* /app/ 2>/dev/null || true
-COPY --chown=root:root exploit_cache.json* /app/ 2>/dev/null || true
-COPY --chown=root:root debian_security_cache.json* /app/ 2>/dev/null || true
-COPY --chown=root:root ubuntu_security_cache.json* /app/ 2>/dev/null || true
+# ── 6) 캐시 데이터 복사 (선택적) ──
+# Git LFS 파일이 없으면 와일드카드로 스킵됨
+# 빌드 컨텍스트에 있으면 복사, 없으면 무시
+COPY nvd_cache.db* /app/data/
+COPY kev_cache.json* /app/
+COPY exploit_cache.json* /app/
+COPY debian_security_cache.json* /app/
+COPY ubuntu_security_cache.json* /app/
 
 # ── 6-1) LFS 포인터 파일 제거 (깨진 파일 방지) ──
 # Git LFS 미설치 시 포인터 텍스트(~130B)만 받아짐 → SQLite 에러 원인
